@@ -1,0 +1,15 @@
+[AMQP]
+
+# Host information
+host = "amqp.example.com"
+vhost = "vhost"
+
+# Username and password for the AMQP router
+username = "amqpusername"
+password = "amqppassword"
+
+# Exchange to listen for raw records
+exchange = 'gracc.osg.raw'
+
+# Queue to use to listen to raw records
+queue = 'grace.osg.archive'
