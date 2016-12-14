@@ -13,3 +13,12 @@ exchange = 'gracc.osg.raw'
 
 # Queue to use to listen to raw records
 queue = 'grace.osg.archive'
+
+[Directories]
+
+# Location of in-progress tarfiles should be written.
+sandbox = 'sandbox'
+
+# Output location of finalized tarball
+output = 'output'
+
