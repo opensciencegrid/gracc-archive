@@ -2,6 +2,7 @@
 import os
 import pwd
 import time
+import errno
 import Queue
 import shutil
 import hashlib
@@ -14,6 +15,28 @@ import threading
 
 import pika
 import toml
+
+def move_without_overwrite(src, orig_dest):
+    counter = 0
+    while True:
+        dest_dir, dest_fname = os.path.split(orig_dest)
+        if counter:
+            parts = dest_fname.split(".")
+            parts = [parts[0], "%d" % counter] + parts[1:]
+            dest_fname = ".".join(parts)
+        dest = os.path.join(dest_dir, dest_fname)
+        try:
+            fd = os.open(dest, os.O_CREAT|os.O_EXCL)
+            break
+        except OSError as oe:
+            if (oe.errno != errno.EEXIST):
+                raise
+        counter += 1
+    try:
+        shutil.move(src, dest)
+    finally:
+        os.close(fd)
+
 
 class ArchiverAgent(object):
     
@@ -36,7 +59,7 @@ class ArchiverAgent(object):
             fname = os.path.split(source_file)[-1]
             output_file = os.path.join(self._config['Directories']['output'], fname)
             print "Copying final archive file from %s to %s" % (source_file, output_file)
-            shutil.move(source_file, output_file)
+            move_without_overwrite(source_file, output_file)
 
 
     def createConnection(self):
@@ -80,8 +103,21 @@ class ArchiverAgent(object):
         dt = datetime.datetime.utcnow()
         output_fname = self.genFilename(dt)
         tf = tarfile.open(output_fname, mode="w|gz")
+        method_frame = None
         while True:
-            method_frame, header_frame, record = self.queue.get(block=True)
+            try:
+                method_frame, header_frame, record = self.queue.get(block=True, timeout=10)
+            except Queue.Empty as qe:
+                if method_frame is None:
+                    continue
+                # Timed out waiting for new updates; let's ACK outstanding requests.
+                print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
+                with open(output_fname, "a") as fp:
+                    os.fsync(fp.fileno())
+                # Here, method_frame is the prior iteration.
+                self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
+                method_frame = None
+                continue
             hobj = hashlib.sha256()
             hobj.update(record)
             now = time.time()
@@ -137,6 +173,12 @@ def main():
 
     if args.dev:
         config.setdefault('AMQP', {})['auto_delete'] = 'true'
+
+    # Move any previous file to the output directory; we cannot append currently.
+    for fname in os.listdir(config['Directories']['sandbox']):
+        in_fname = os.path.join(config['Directories']['sandbox'], fname)
+        out_fname = os.path.join(config['Directories']['output'], fname)
+        move_without_overwrite(in_fname, out_fname)
 
     # Create and run the OverMind
     print "Starting the archiver agent."

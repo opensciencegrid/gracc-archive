@@ -12,7 +12,7 @@ password = "amqppassword"
 exchange = 'gracc.osg.raw'
 
 # Queue to use to listen to raw records
-queue = 'grace.osg.archive'
+queue = 'gracc.osg.archive'
 
 [Directories]
 
