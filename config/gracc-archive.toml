@@ -13,9 +13,10 @@ queue = 'gracc.osg.archive'
 
 [Directories]
 
+
 # Location of in-progress tarfiles should be written.
-sandbox = 'sandbox'
+sandbox = '/var/lib/graccarchive/sandbox'
 
 # Output location of finalized tarball
-output = 'output'
+output = '/var/lib/graccarchive/sandbox/output'
 
