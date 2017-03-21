@@ -1,12 +1,9 @@
 [AMQP]
 
-# Host information
-host = "amqp.example.com"
-vhost = "vhost"
 
-# Username and password for the AMQP router
-username = "amqpusername"
-password = "amqppassword"
+# Host information
+# # scheme://username:password@host:port/vhost
+url = "amqps://amqpusername:amqppassword@amqp.exapmle.com:5671/vhost"
 
 # Exchange to listen for raw records
 exchange = 'gracc.osg.raw'

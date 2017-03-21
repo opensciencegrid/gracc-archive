@@ -63,13 +63,11 @@ class ArchiverAgent(object):
 
 
     def createConnection(self):
-        credentials = pika.PlainCredentials(self._config['AMQP']['username'], self._config['AMQP']['password'])
-        self.parameters = pika.ConnectionParameters(self._config['AMQP']['host'],
-                                                5672, self._config['AMQP']['vhost'], credentials)
+
+        self.parameters = pika.URLParameters(self._config['AMQP']['url'])
         self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
 
         self._chan = self._conn.channel()
-
         # TODO: capture exit codes on all these call
         self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False), exclusive=True)
         self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
