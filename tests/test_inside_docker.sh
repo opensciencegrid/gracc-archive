@@ -67,5 +67,7 @@ sleep 60
 journalctl -u graccreq.service --no-pager -n 1000
 journalctl -u graccarchive.service --no-pager -n 1000
 
+find /var/lib/graccarchive/
+
 exit $test_exit
 
