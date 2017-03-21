@@ -1,5 +1,5 @@
 Name:           gracc-archive
-Version:        1.-
+Version:        1.0
 Release:        1%{?dist}
 Summary:        GRACC Archive
 
