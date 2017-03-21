@@ -11,6 +11,15 @@ class TestClient(unittest.TestCase):
         #self.client = Client.Client("gracc.osg.requests")
         pass
         
+    def test_exchange_raw(self):
+        # Set the timerange
+        start_time = datetime(2016, 6, 1)
+        end_time = start_time + timedelta(days=32)
+        
+        client = Client("gracc.osg.requests", "gracc.osg.requests")
+        client.query(start_time, end_time, 'raw', destination_exchange="gracc.osg.raw", destination_key="gracc.osg.raw")
+
+
     def test_raw(self):
         # Set the timerange
         start_time = datetime(2016, 6, 1)
@@ -19,8 +28,10 @@ class TestClient(unittest.TestCase):
 
         def getMessage(msg):
             status['num_messages'] += 1
-            
+
         client = Client("gracc.osg.requests", "gracc.osg.requests")
-        client.query(start_time, end_time, 'raw', destination_exchange="gracc.osg.raw", destination_key="gracc.osg.raw")
+        client.query(start_time, end_time, 'raw', getMessage)
+        self.assertGreater(status['num_messages'], 1)
+
                
         
