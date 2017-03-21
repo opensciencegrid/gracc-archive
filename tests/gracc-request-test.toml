@@ -1,0 +1,16 @@
+[General]
+Profile = true
+
+[AMQP]
+
+# Host information
+url = "amqp://guest:guest@localhost/"
+
+exchange = 'gracc.osg.requests'
+queue = 'gracc.osg.requests'
+
+[ElasticSearch]
+raw_index = 'gracc.osg.raw0-*'
+raw_type = 'JobUsageRecord'
+transfer_type = 'Storage'
+transfer_index = 'gracc.osg-transfer.raw-*'

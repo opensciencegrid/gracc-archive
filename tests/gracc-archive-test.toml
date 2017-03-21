@@ -1,0 +1,20 @@
+[AMQP]
+
+
+# Host information
+# # scheme://username:password@host:port/vhost
+url = "amqp://guest:guest@localhost/"
+
+# Exchange to listen for raw records
+exchange = 'gracc.osg.raw'
+
+# Queue to use to listen to raw records
+queue = 'gracc.osg.archive'
+
+[Directories]
+
+# Location of in-progress tarfiles should be written.
+sandbox = 'sandbox'
+
+# Output location of finalized tarball
+output = 'output'
