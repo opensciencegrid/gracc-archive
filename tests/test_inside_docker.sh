@@ -30,6 +30,9 @@ rpmbuild --define '_topdir /tmp/rpmbuild' -ba /tmp/rpmbuild/SPECS/gracc-archive.
 
 yum localinstall -y /tmp/rpmbuild/RPMS/noarch/gracc-archive*
 
+# Create the raw exchange
+python gracc-archive/tests/create_exchanges.py
+
 # Copy in the test configuration for the graccreq
 cp -f gracc-archive/tests/gracc-archive-test.toml /etc/graccarchive/config.d/gracc-archive.toml
 cp -f gracc-archive/tests/gracc-request-test.toml /etc/graccreq/config.d/gracc-request.toml
