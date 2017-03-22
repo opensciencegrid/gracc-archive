@@ -24,11 +24,11 @@ class UnArchiver(object):
         self._chan.basic_publish(exchange=self.exchange, routing_key='', body=record)
         
     def parseTarFile(self, tar_file):
-        tf = tarfile.TarFile(tar_file, mode='r')
+        tf = tarfile.open(tar_file, mode='r')
         
         # For each file in the tar file:
         for member in tf:
-            f = tf.extracfile(member)
+            f = tf.extractfile(member)
             print "Sending file %s" % member
             self.sendRecord(f.read())
         
@@ -49,11 +49,11 @@ def main():
     args = parser.parse_args()
     print args
     
-    unarchive = UnArchiver()
-    unarchive.createConnection(args['rabbiturl'], args['exchange'])
+    unarchive = UnArchiver(args.rabbiturl, args.exchange)
+    unarchive.createConnection()
     
-    for tar_file in args['tarfile']:
-        parseTarFile(tar_file)
+    for tar_file in args.tarfile:
+        unarchive.parseTarFile(tar_file)
 
     
 
