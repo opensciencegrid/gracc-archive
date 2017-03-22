@@ -12,6 +12,7 @@ import argparse
 import datetime
 import cStringIO
 import threading
+import signal
 
 import pika
 import toml
@@ -176,6 +177,11 @@ def main():
 
     if args.dev:
         config.setdefault('AMQP', {})['auto_delete'] = 'true'
+
+    # Capture and call sys.exit for SIGTERM commands
+    def exit_gracefully(signum, frame):
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, exit_gracefully)
 
     # Move any previous file to the output directory; we cannot append currently.
     for fname in os.listdir(config['Directories']['sandbox']):
