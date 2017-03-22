@@ -102,56 +102,61 @@ class ArchiverAgent(object):
         output_fname = self.genFilename(dt)
         tf = tarfile.open(output_fname, mode="w|gz")
         method_frame = None
-        while True:
-            try:
-                method_frame, header_frame, record = self.queue.get(block=True, timeout=10)
-            except Queue.Empty as qe:
-                if method_frame is None:
+        try:
+            while True:
+                try:
+                    method_frame, header_frame, record = self.queue.get(block=True, timeout=10)
+                except Queue.Empty as qe:
+                    if method_frame is None:
+                        continue
+                    # Timed out waiting for new updates; let's ACK outstanding requests.
+                    print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
+                    with open(output_fname, "a") as fp:
+                        os.fsync(fp.fileno())
+                    # Here, method_frame is the prior iteration.
+                    self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
+                    method_frame = None
                     continue
-                # Timed out waiting for new updates; let's ACK outstanding requests.
-                print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
-                with open(output_fname, "a") as fp:
-                    os.fsync(fp.fileno())
-                # Here, method_frame is the prior iteration.
-                self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
-                method_frame = None
-                continue
-            hobj = hashlib.sha256()
-            hobj.update(record)
-            now = time.time()
-            dt = datetime.datetime.utcfromtimestamp(now)
-            formatted_time = dt.strftime("gracc/%Y/%m/%d/%H")
-            next_output_fname = self.genFilename(dt)
-            if next_output_fname != output_fname:
-                tf.close()
-                print "Switching from %s to %s" % (output_fname, next_output_fname)
-                yield output_fname
-                tf = tarfile.open(next_output_fname, mode="w|gz")
-                counter = 0
-                output_fname = next_output_fname
-            fname = "%s/record-%d-%s" % (formatted_time, counter, hobj.hexdigest())
-            ti = tarfile.TarInfo(fname)
-            sio = cStringIO.StringIO()
-            sio.write(record)
-            ti.size = sio.tell()
-            sio.seek(0)
-            ti.uid = pw.pw_uid
-            ti.gid = pw.pw_gid
-            ti.mtime = now
-            ti.mode = 0600
-            tf.addfile(ti, sio)
-            self.queue.task_done()
-            counter += 1
-            if counter % 1000 == 0:
-                print "Syncing file to disk (count=%d)" % counter
-                with open(output_fname, "a") as fp:
-                    os.fsync(fp.fileno())
-                self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
-        with open(output_fname, "a") as fp:
-            os.fsync(fp.fileno())
-        self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
-        print "Finalized last output file: %s" %  output_fname
-        yield output_fname
+                hobj = hashlib.sha256()
+                hobj.update(record)
+                now = time.time()
+                dt = datetime.datetime.utcfromtimestamp(now)
+                formatted_time = dt.strftime("gracc/%Y/%m/%d/%H")
+                next_output_fname = self.genFilename(dt)
+                if next_output_fname != output_fname:
+                    tf.close()
+                    print "Switching from %s to %s" % (output_fname, next_output_fname)
+                    yield output_fname
+                    tf = tarfile.open(next_output_fname, mode="w|gz")
+                    counter = 0
+                    output_fname = next_output_fname
+                fname = "%s/record-%d-%s" % (formatted_time, counter, hobj.hexdigest())
+                ti = tarfile.TarInfo(fname)
+                sio = cStringIO.StringIO()
+                sio.write(record)
+                ti.size = sio.tell()
+                sio.seek(0)
+                ti.uid = pw.pw_uid
+                ti.gid = pw.pw_gid
+                ti.mtime = now
+                ti.mode = 0600
+                tf.addfile(ti, sio)
+                self.queue.task_done()
+                counter += 1
+                if counter % 1000 == 0:
+                    print "Syncing file to disk (count=%d)" % counter
+                    with open(output_fname, "a") as fp:
+                        os.fsync(fp.fileno())
+                    self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
+            with open(output_fname, "a") as fp:
+                os.fsync(fp.fileno())
+            self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
+            print "Finalized last output file: %s" %  output_fname
+            yield output_fname
+        except SystemExit as se:
+            print "Cleaning up after systemexit"
+            tf.close()
+            yield output_fname
 
 
 def main():
