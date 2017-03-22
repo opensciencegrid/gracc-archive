@@ -81,7 +81,7 @@ sleep 12
 
 # Now, check to make sure the archiver picked it up!
 ls -lRh /var/lib/graccarchive/
-if [ -s /var/lib/graccarchive/sandbox/* ]
+if ! [ -s /var/lib/graccarchive/sandbox/* ]
 then
   echo "Error, archive is 0"
   exit 1
