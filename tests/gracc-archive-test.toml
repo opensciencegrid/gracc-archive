@@ -17,4 +17,4 @@ queue = 'gracc.osg.archive'
 sandbox = '/var/lib/graccarchive/sandbox'
 
 # Output location of finalized tarball
-output = '/var/lib/graccarchive/sandbox/output'
+output = '/var/lib/graccarchive/output'
