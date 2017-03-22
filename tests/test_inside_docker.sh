@@ -67,7 +67,22 @@ sleep 60
 journalctl -u graccreq.service --no-pager -n 1000
 journalctl -u graccarchive.service --no-pager -n 1000
 
-find /var/lib/graccarchive/
+# Now that we have data in the archive, restart it
+ls -lRh /var/lib/graccarchive/
+systemctl restart graccarchive.service
+
+# Ok, there should be file in /var/lib/graccarchive/output, unarchive it!
+graccunarchiver "amqp://guest:guest@localhost/" gracc.osg.raw /var/lib/graccarchive/output/*
+
+sleep 12
+
+# Now, check to make sure the archiver picked it up!
+ls -lRh /var/lib/graccarchive/
+if [ -s /var/lib/graccarchive/sandbox/* ]
+then
+  echo "Error, archive is 0"
+  exit 1
+fi
 
 exit $test_exit
 
