@@ -71,6 +71,9 @@ journalctl -u graccarchive.service --no-pager -n 1000
 ls -lRh /var/lib/graccarchive/
 systemctl restart graccarchive.service
 
+sleep 2
+ls -lRh /var/lib/graccarchive/
+
 # Ok, there should be file in /var/lib/graccarchive/output, unarchive it!
 graccunarchiver "amqp://guest:guest@localhost/" gracc.osg.raw /var/lib/graccarchive/output/*
 
