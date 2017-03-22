@@ -29,7 +29,6 @@ class UnArchiver(object):
         # For each file in the tar file:
         for member in tf:
             f = tf.extractfile(member)
-            print "Sending file %s" % member
             self.sendRecord(f.read())
         
         tf.close()
@@ -53,6 +52,7 @@ def main():
     unarchive.createConnection()
     
     for tar_file in args.tarfile:
+        print "Parsing %s" % tar_file
         unarchive.parseTarFile(tar_file)
 
     
