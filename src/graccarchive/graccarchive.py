@@ -13,6 +13,7 @@ import datetime
 import cStringIO
 import threading
 import signal
+import sys
 
 import pika
 import toml
