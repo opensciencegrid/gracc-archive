@@ -45,6 +45,7 @@ class ArchiverAgent(object):
     def __init__(self, config):
         self._config = config
         self.queue = Queue.Queue(maxsize=1000)
+        self.message_counter = 0
         
     def run(self):
         self.createConnection()
@@ -71,7 +72,7 @@ class ArchiverAgent(object):
 
         self._chan = self._conn.channel()
         # TODO: capture exit codes on all these call
-        self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False), exclusive=True)
+        self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
         self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
 
 
@@ -86,11 +87,19 @@ class ArchiverAgent(object):
         except KeyboardInterrupt:
             self._chan.stop_consuming()
             
-
+    
     def receiveMsg(self, channel, method_frame, header_frame, body):
         
+        
+        self.message_counter += 1
         self.queue.put((method_frame, header_frame, body))
-        pass
+        
+        # Every 1000 messages, clear the queue and make sure everything is written
+        if self.message_counter % 1000 == 0:
+            self.queue.join()
+            print "Cleared queue"
+            self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
+            
 
 
     def genFilename(self, dt):
@@ -115,8 +124,6 @@ class ArchiverAgent(object):
                     print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
                     with open(output_fname, "a") as fp:
                         os.fsync(fp.fileno())
-                    # Here, method_frame is the prior iteration.
-                    self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
                     method_frame = None
                     continue
                 hobj = hashlib.sha256()
@@ -149,10 +156,8 @@ class ArchiverAgent(object):
                     print "Syncing file to disk (count=%d)" % counter
                     with open(output_fname, "a") as fp:
                         os.fsync(fp.fileno())
-                    self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
             with open(output_fname, "a") as fp:
                 os.fsync(fp.fileno())
-            self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
             print "Finalized last output file: %s" %  output_fname
             yield output_fname
         except SystemExit as se:
