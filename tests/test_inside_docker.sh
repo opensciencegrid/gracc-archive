@@ -34,7 +34,7 @@ yum localinstall -y /tmp/rpmbuild/RPMS/noarch/gracc-archive*
 python gracc-archive/tests/create_exchanges.py
 
 # Copy in the test configuration for the graccreq
-cp -f gracc-archive/tests/gracc-archive-test.toml /etc/graccarchive/config.d/gracc-archive-test.toml
+cp -f gracc-archive/tests/gracc-archive-test.toml /etc/graccarchive/config/gracc-archive-test.toml
 cp -f gracc-archive/tests/gracc-request-test.toml /etc/graccreq/config.d/gracc-request.toml
 
 systemctl start graccreq.service
