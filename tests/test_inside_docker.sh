@@ -34,15 +34,15 @@ yum localinstall -y /tmp/rpmbuild/RPMS/noarch/gracc-archive*
 python gracc-archive/tests/create_exchanges.py
 
 # Copy in the test configuration for the graccreq
-cp -f gracc-archive/tests/gracc-archive-test.toml /etc/graccarchive/config.d/gracc-archive.toml
+cp -f gracc-archive/tests/gracc-archive-test.toml /etc/graccarchive/config.d/gracc-archive-test.toml
 cp -f gracc-archive/tests/gracc-request-test.toml /etc/graccreq/config.d/gracc-request.toml
 
 systemctl start graccreq.service
-systemctl start graccarchive.service
+systemctl start graccarchive@test.service
 
 # Wait for the overmind to start up
 sleep 10
-journalctl -u graccarchive.service --no-pager
+journalctl -u graccarchive@test.service --no-pager
 
 # Install the test data
 curl -O https://nodejs.org/dist/v4.4.4/node-v4.4.4-linux-x64.tar.xz
@@ -65,7 +65,7 @@ popd
 
 sleep 60
 journalctl -u graccreq.service --no-pager -n 1000
-journalctl -u graccarchive.service --no-pager -n 1000
+journalctl -u graccarchive@test.service --no-pager -n 1000
 
 # Now that we have data in the archive, restart it
 ls -lRh /var/lib/graccarchive/

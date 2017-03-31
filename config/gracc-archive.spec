@@ -43,9 +43,9 @@ exit 0
 
 
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config.d/
-install -m 0744 config/gracc-archive.toml $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config.d/gracc-archive.toml
+install -m 0744 config/gracc-archive.toml $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config.d/gracc-archive-raw.toml
 install -d -m 0755 $RPM_BUILD_ROOT/%{_unitdir}
-install -m 0744 config/graccarchive.service $RPM_BUILD_ROOT/%{_unitdir}/
+install -m 0744 config/graccarchive@.service $RPM_BUILD_ROOT/%{_unitdir}/
 
 # For the archiver output directories
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/graccarchive/sandbox
