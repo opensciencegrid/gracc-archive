@@ -42,8 +42,8 @@ exit 0
 %{py2_install}
 
 
-install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config.d/
-install -m 0744 config/gracc-archive.toml $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config.d/gracc-archive-raw.toml
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config/
+install -m 0744 config/gracc-archive.toml $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config/gracc-archive-raw.toml
 install -d -m 0755 $RPM_BUILD_ROOT/%{_unitdir}
 install -m 0744 config/graccarchive@.service $RPM_BUILD_ROOT/%{_unitdir}/
 
@@ -58,7 +58,7 @@ install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/graccarchive/output
 %{python2_sitelib}/graccarchive-%{version}-py2.?.egg-info
 %attr(755, root, root) %{_bindir}/*
 %{_unitdir}/graccarchive.service
-%config %{_sysconfdir}/graccarchive/config.d/gracc-archive.toml
+%config %{_sysconfdir}/graccarchive/config/gracc-archive-raw.toml
 %{_sharedstatedir}/graccarchive
 
 
