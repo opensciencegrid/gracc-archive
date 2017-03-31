@@ -57,7 +57,7 @@ install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/graccarchive/output
 %{python2_sitelib}/graccarchive
 %{python2_sitelib}/graccarchive-%{version}-py2.?.egg-info
 %attr(755, root, root) %{_bindir}/*
-%{_unitdir}/graccarchive.service
+%{_unitdir}/graccarchive@.service
 %config %{_sysconfdir}/graccarchive/config/gracc-archive-raw.toml
 %{_sharedstatedir}/graccarchive
 
