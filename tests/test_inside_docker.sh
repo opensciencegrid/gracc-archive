@@ -69,7 +69,7 @@ journalctl -u graccarchive@test.service --no-pager -n 1000
 
 # Now that we have data in the archive, restart it
 ls -lRh /var/lib/graccarchive/
-systemctl restart graccarchive.service
+systemctl restart graccarchive@test.service
 
 sleep 2
 ls -lRh /var/lib/graccarchive/
