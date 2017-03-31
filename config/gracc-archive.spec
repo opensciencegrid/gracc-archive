@@ -43,7 +43,7 @@ exit 0
 
 
 install -d -m 0755 $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config/
-install -m 0744 config/gracc-archive.toml $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config/gracc-archive-raw.toml
+install -m 0744 config/gracc-archive-raw.toml $RPM_BUILD_ROOT/%{_sysconfdir}/graccarchive/config/gracc-archive-raw.toml
 install -d -m 0755 $RPM_BUILD_ROOT/%{_unitdir}
 install -m 0744 config/graccarchive@.service $RPM_BUILD_ROOT/%{_unitdir}/
 
