@@ -3,7 +3,7 @@
 
 # Host information
 # # scheme://username:password@host:port/vhost
-url = "amqps://amqpusername:amqppassword@amqp.exapmle.com:5671/vhost"
+url = "amqp://guest:guest@localhost/"
 
 # Exchange to listen for raw records
 exchange = 'gracc.osg.raw'
@@ -13,10 +13,8 @@ queue = 'gracc.osg.archive'
 
 [Directories]
 
-
 # Location of in-progress tarfiles should be written.
 sandbox = '/var/lib/graccarchive/sandbox'
 
 # Output location of finalized tarball
 output = '/var/lib/graccarchive/output'
-

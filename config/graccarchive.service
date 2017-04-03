@@ -1,0 +1,16 @@
+[Unit]
+Description=GRACC Archiver
+Documentation=https://opensciencegrid.github.io/gracc
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=gracc
+Group=gracc
+Type=simple
+Restart=on-failure
+ExecStart=/usr/bin/graccarchiver -c /etc/graccarchive/config.d/gracc-archive.toml
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

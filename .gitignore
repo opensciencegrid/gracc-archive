@@ -1,5 +1,4 @@
 src/graccarchive/*.pyc
-*.toml
 output
 gracc
 sandbox

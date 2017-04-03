@@ -18,7 +18,8 @@ setup(name='graccarchive',
       ],
       entry_points= {
             'console_scripts': [
-                  'graccarchiver = graccarchive.graccarchive:main'
+                  'graccarchiver = graccarchive.graccarchive:main',
+                  'graccunarchiver = graccarchive.unarchive:main'
             ]
       }
 )

@@ -1,6 +1,6 @@
 Name:           gracc-archive
-Version:        1.-
-Release:        1%{?dist}
+Version:        1.0
+Release:        2%{?dist}
 Summary:        GRACC Archive
 
 License:        ASL 2.0
@@ -47,6 +47,9 @@ install -m 0744 config/gracc-archive.toml $RPM_BUILD_ROOT/%{_sysconfdir}/graccar
 install -d -m 0755 $RPM_BUILD_ROOT/%{_unitdir}
 install -m 0744 config/graccarchive.service $RPM_BUILD_ROOT/%{_unitdir}/
 
+# For the archiver output directories
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/graccarchive/sandbox
+install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/graccarchive/output
 
 
 %files
@@ -56,12 +59,17 @@ install -m 0744 config/graccarchive.service $RPM_BUILD_ROOT/%{_unitdir}/
 %attr(755, root, root) %{_bindir}/*
 %{_unitdir}/graccarchive.service
 %config %{_sysconfdir}/graccarchive/config.d/gracc-archive.toml
+%{_sharedstatedir}/graccarchive
+
 
 %doc
 
 
 
 %changelog
+* Tue Mar 21 2017 Derek Weitzel <dweitzel@cse.unl.edu> - 1.0-2
+- Add state directories
+
 * Tue Dec 13 2016 Derek Weitzel <dweitzel@cse.unl.edu> 1.0-1
 - Initial build
 

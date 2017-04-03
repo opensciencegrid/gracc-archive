@@ -12,6 +12,8 @@ import argparse
 import datetime
 import cStringIO
 import threading
+import signal
+import sys
 
 import pika
 import toml
@@ -43,6 +45,7 @@ class ArchiverAgent(object):
     def __init__(self, config):
         self._config = config
         self.queue = Queue.Queue(maxsize=1000)
+        self.message_counter = 0
         
     def run(self):
         self.createConnection()
@@ -63,15 +66,13 @@ class ArchiverAgent(object):
 
 
     def createConnection(self):
-        credentials = pika.PlainCredentials(self._config['AMQP']['username'], self._config['AMQP']['password'])
-        self.parameters = pika.ConnectionParameters(self._config['AMQP']['host'],
-                                                5672, self._config['AMQP']['vhost'], credentials)
+
+        self.parameters = pika.URLParameters(self._config['AMQP']['url'])
         self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
 
         self._chan = self._conn.channel()
-
         # TODO: capture exit codes on all these call
-        self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False), exclusive=True)
+        self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
         self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
 
 
@@ -86,11 +87,19 @@ class ArchiverAgent(object):
         except KeyboardInterrupt:
             self._chan.stop_consuming()
             
-
+    
     def receiveMsg(self, channel, method_frame, header_frame, body):
         
+        
+        self.message_counter += 1
         self.queue.put((method_frame, header_frame, body))
-        pass
+        
+        # Every 1000 messages, clear the queue and make sure everything is written
+        if self.message_counter % 1000 == 0:
+            self.queue.join()
+            print "Cleared queue"
+            self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
+            
 
 
     def genFilename(self, dt):
@@ -104,56 +113,57 @@ class ArchiverAgent(object):
         output_fname = self.genFilename(dt)
         tf = tarfile.open(output_fname, mode="w|gz")
         method_frame = None
-        while True:
-            try:
-                method_frame, header_frame, record = self.queue.get(block=True, timeout=10)
-            except Queue.Empty as qe:
-                if method_frame is None:
+        try:
+            while True:
+                try:
+                    method_frame, header_frame, record = self.queue.get(block=True, timeout=10)
+                except Queue.Empty as qe:
+                    if method_frame is None:
+                        continue
+                    # Timed out waiting for new updates; let's ACK outstanding requests.
+                    print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
+                    with open(output_fname, "a") as fp:
+                        os.fsync(fp.fileno())
+                    method_frame = None
                     continue
-                # Timed out waiting for new updates; let's ACK outstanding requests.
-                print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
-                with open(output_fname, "a") as fp:
-                    os.fsync(fp.fileno())
-                # Here, method_frame is the prior iteration.
-                self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
-                method_frame = None
-                continue
-            hobj = hashlib.sha256()
-            hobj.update(record)
-            now = time.time()
-            dt = datetime.datetime.utcfromtimestamp(now)
-            formatted_time = dt.strftime("gracc/%Y/%m/%d/%H")
-            next_output_fname = self.genFilename(dt)
-            if next_output_fname != output_fname:
-                tf.close()
-                print "Switching from %s to %s" % (output_fname, next_output_fname)
-                yield output_fname
-                tf = tarfile.open(next_output_fname, mode="w|gz")
-                counter = 0
-                output_fname = next_output_fname
-            fname = "%s/record-%d-%s" % (formatted_time, counter, hobj.hexdigest())
-            ti = tarfile.TarInfo(fname)
-            sio = cStringIO.StringIO()
-            sio.write(record)
-            ti.size = sio.tell()
-            sio.seek(0)
-            ti.uid = pw.pw_uid
-            ti.gid = pw.pw_gid
-            ti.mtime = now
-            ti.mode = 0600
-            tf.addfile(ti, sio)
-            self.queue.task_done()
-            counter += 1
-            if counter % 1000 == 0:
-                print "Syncing file to disk (count=%d)" % counter
-                with open(output_fname, "a") as fp:
-                    os.fsync(fp.fileno())
-                self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
-        with open(output_fname, "a") as fp:
-            os.fsync(fp.fileno())
-        self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
-        print "Finalized last output file: %s" %  output_fname
-        yield output_fname
+                hobj = hashlib.sha256()
+                hobj.update(record)
+                now = time.time()
+                dt = datetime.datetime.utcfromtimestamp(now)
+                formatted_time = dt.strftime("gracc/%Y/%m/%d/%H")
+                next_output_fname = self.genFilename(dt)
+                if next_output_fname != output_fname:
+                    tf.close()
+                    print "Switching from %s to %s" % (output_fname, next_output_fname)
+                    yield output_fname
+                    tf = tarfile.open(next_output_fname, mode="w|gz")
+                    counter = 0
+                    output_fname = next_output_fname
+                fname = "%s/record-%d-%s" % (formatted_time, counter, hobj.hexdigest())
+                ti = tarfile.TarInfo(fname)
+                sio = cStringIO.StringIO()
+                sio.write(record)
+                ti.size = sio.tell()
+                sio.seek(0)
+                ti.uid = pw.pw_uid
+                ti.gid = pw.pw_gid
+                ti.mtime = now
+                ti.mode = 0600
+                tf.addfile(ti, sio)
+                self.queue.task_done()
+                counter += 1
+                if counter % 1000 == 0:
+                    print "Syncing file to disk (count=%d)" % counter
+                    with open(output_fname, "a") as fp:
+                        os.fsync(fp.fileno())
+            with open(output_fname, "a") as fp:
+                os.fsync(fp.fileno())
+            print "Finalized last output file: %s" %  output_fname
+            yield output_fname
+        except SystemExit as se:
+            print "Cleaning up after systemexit"
+            tf.close()
+            yield output_fname
 
 
 def main():
@@ -173,6 +183,11 @@ def main():
 
     if args.dev:
         config.setdefault('AMQP', {})['auto_delete'] = 'true'
+
+    # Capture and call sys.exit for SIGTERM commands
+    def exit_gracefully(signum, frame):
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, exit_gracefully)
 
     # Move any previous file to the output directory; we cannot append currently.
     for fname in os.listdir(config['Directories']['sandbox']):
