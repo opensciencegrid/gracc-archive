@@ -9,7 +9,7 @@ User=gracc
 Group=gracc
 Type=simple
 Restart=on-failure
-ExecStart=/usr/bin/graccarchiver -c /etc/graccarchive/config.d/gracc-archive.toml
+ExecStart=/usr/bin/graccarchiver -c /etc/graccarchive/config/gracc-archive-%i.toml
 TimeoutStopSec=20
 
 [Install]
