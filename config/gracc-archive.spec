@@ -1,5 +1,5 @@
 Name:           gracc-archive
-Version:        1.1
+Version:        1.2
 Release:        1%{?dist}
 Summary:        GRACC Archive
 
@@ -67,6 +67,9 @@ install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/graccarchive/output
 
 
 %changelog
+* Mon Apr 03 2017 Derek Weitzel <dweitzel@cse.unl.edu> - 1.2-1
+- Adding service instances
+
 * Mon Apr 03 2017 Derek Weitzel <dweitzel@cse.unl.edu> - 1.1-1
 - Adding service instances
 
