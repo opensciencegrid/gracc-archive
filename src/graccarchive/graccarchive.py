@@ -24,7 +24,7 @@ def move_without_overwrite(src, orig_dest):
     while True:
         dest_dir, dest_fname = os.path.split(orig_dest)
         parts = dest_fname.split(".")
-        parts = [parts[0], "%d" % str(uuid.uuid4())] + parts[1:]
+        parts = [parts[0], "%s" % str(uuid.uuid4())] + parts[1:]
         dest_fname = ".".join(parts)
         dest = os.path.join(dest_dir, dest_fname)
         try:
