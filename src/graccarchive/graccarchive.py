@@ -14,18 +14,18 @@ import cStringIO
 import threading
 import signal
 import sys
+import uuid
 
 import pika
 import toml
 
 def move_without_overwrite(src, orig_dest):
-    counter = 0
+    # Use a UUID in order to uniquely write the file
     while True:
         dest_dir, dest_fname = os.path.split(orig_dest)
-        if counter:
-            parts = dest_fname.split(".")
-            parts = [parts[0], "%d" % counter] + parts[1:]
-            dest_fname = ".".join(parts)
+        parts = dest_fname.split(".")
+        parts = [parts[0], "%s" % str(uuid.uuid4())] + parts[1:]
+        dest_fname = ".".join(parts)
         dest = os.path.join(dest_dir, dest_fname)
         try:
             fd = os.open(dest, os.O_CREAT|os.O_EXCL)
@@ -33,7 +33,6 @@ def move_without_overwrite(src, orig_dest):
         except OSError as oe:
             if (oe.errno != errno.EEXIST):
                 raise
-        counter += 1
     try:
         shutil.move(src, dest)
     finally:
