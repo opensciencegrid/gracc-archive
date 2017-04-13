@@ -17,6 +17,8 @@ BuildRequires:  epel-rpm-macros
 BuildRequires:  systemd
 Requires:       python2-pika
 Requires:       python-toml
+Requires:       python-setuptools
+Requires:       python-urllib3
 Requires(pre):  shadow-utils
 
 %description
