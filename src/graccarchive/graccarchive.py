@@ -122,6 +122,7 @@ class ArchiverAgent(object):
         dt = datetime.datetime.utcnow()
         output_fname = self.genFilename(dt)
         tf = tarfile.open(output_fname, mode="w|gz")
+        record = None
         try:
             while True:
                 try:
