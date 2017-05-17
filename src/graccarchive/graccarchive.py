@@ -125,7 +125,7 @@ class ArchiverAgent(object):
         try:
             while True:
                 try:
-                    _, _, record = self.queue.get(block=True, timeout=10)
+                    record = self.queue.get(block=True, timeout=10)
                 except Queue.Empty as qe:
                     if body is None:
                         continue
