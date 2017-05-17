@@ -127,7 +127,7 @@ class ArchiverAgent(object):
                 try:
                     record = self.queue.get(block=True, timeout=10)
                 except Queue.Empty as qe:
-                    if body is None:
+                    if record is None:
                         continue
                     # Timed out waiting for new updates; let's ACK outstanding requests.
                     print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
