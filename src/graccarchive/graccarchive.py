@@ -134,6 +134,7 @@ class ArchiverAgent(object):
                     print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
                     with open(output_fname, "a") as fp:
                         os.fsync(fp.fileno())
+                    record = None
                     continue
                 hobj = hashlib.sha256()
                 hobj.update(record)
