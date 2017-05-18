@@ -17,6 +17,7 @@ import sys
 import uuid
 
 import pika
+import pika.exceptions
 import toml
 
 def move_without_overwrite(src, orig_dest):
@@ -80,18 +81,27 @@ class ArchiverAgent(object):
         # The library gives us an event loop built-in, so lets use it!
         # This program only responds to messages on the rabbitmq, so no
         # reason to listen to anything else.
-        try:
-            print "Starting to consume data from queue", self._config['AMQP']['queue']
-            self._chan.start_consuming()
-        except KeyboardInterrupt:
-            self._chan.stop_consuming()
+        while True:
+            try:
+                print "Starting to consume data from queue", self._config['AMQP']['queue']
+                self._chan.start_consuming()
+            except KeyboardInterrupt:
+                self._chan.stop_consuming()
+                break
+            except pika.exceptions.ConnectionClosed:
+                print "Connection was closed, re-opening"
+                self.createConnection()
+                self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
+                continue
+            
+            
             
     
     def receiveMsg(self, channel, method_frame, header_frame, body):
         
         
         self.message_counter += 1
-        self.queue.put((method_frame, header_frame, body))
+        self.queue.put(body)
         
         # Every 1000 messages, clear the queue and make sure everything is written
         if self.message_counter % 1000 == 0:
@@ -111,19 +121,19 @@ class ArchiverAgent(object):
         dt = datetime.datetime.utcnow()
         output_fname = self.genFilename(dt)
         tf = tarfile.open(output_fname, mode="w|gz")
-        method_frame = None
+        record = None
         try:
             while True:
                 try:
-                    method_frame, header_frame, record = self.queue.get(block=True, timeout=10)
+                    record = self.queue.get(block=True, timeout=10)
                 except Queue.Empty as qe:
-                    if method_frame is None:
+                    if record is None:
                         continue
                     # Timed out waiting for new updates; let's ACK outstanding requests.
                     print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
                     with open(output_fname, "a") as fp:
                         os.fsync(fp.fileno())
-                    method_frame = None
+                    record = None
                     continue
                 hobj = hashlib.sha256()
                 hobj.update(record)
