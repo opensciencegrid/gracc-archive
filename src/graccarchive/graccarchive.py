@@ -76,7 +76,7 @@ class ArchiverAgent(object):
         # TODO: capture exit codes on all these call
         self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
         self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
-        self._chan.basic_recover()
+        self._chan.basic_recover(requeue=True)
 
 
     def startReceiving(self):
