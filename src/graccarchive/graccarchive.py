@@ -14,6 +14,7 @@ import cStringIO
 import threading
 import signal
 import sys
+import gzip
 
 import pika
 import pika.exceptions
