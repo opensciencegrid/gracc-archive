@@ -14,6 +14,7 @@ import cStringIO
 import threading
 import signal
 import sys
+import gzip
 
 import pika
 import pika.exceptions
@@ -75,6 +76,7 @@ class ArchiverAgent(object):
         # TODO: capture exit codes on all these call
         self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
         self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
+        self._chan.basic_recover(requeue=True)
 
 
     def startReceiving(self):
@@ -121,7 +123,8 @@ class ArchiverAgent(object):
         counter = 0
         dt = datetime.datetime.utcnow()
         output_fname = self.genFilename(dt)
-        tf = tarfile.open(output_fname, mode="w|gz")
+        gzfile = gzip.GzipFile(output_fname, 'a')
+        tf = tarfile.open(fileobj=gzfile, mode="w|")
         record = None
         try:
             while True:
@@ -146,7 +149,8 @@ class ArchiverAgent(object):
                     tf.close()
                     print "Switching from %s to %s" % (output_fname, next_output_fname)
                     yield output_fname
-                    tf = tarfile.open(next_output_fname, mode="w|gz")
+                    gzfile = gzip.GzipFile(next_output_fname, 'a')
+                    tf = tarfile.open(fileobj=gzfile, mode="w|")
                     counter = 0
                     output_fname = next_output_fname
                 fname = "%s/record-%d-%s" % (formatted_time, counter, hobj.hexdigest())
@@ -164,8 +168,11 @@ class ArchiverAgent(object):
                 counter += 1
                 if counter % 1000 == 0:
                     print "Syncing file to disk (count=%d)" % counter
+                    gzfile.flush()
                     with open(output_fname, "a") as fp:
                         os.fsync(fp.fileno())
+                    tf.members = []
+            gzfile.flush()
             with open(output_fname, "a") as fp:
                 os.fsync(fp.fileno())
             print "Finalized last output file: %s" %  output_fname
