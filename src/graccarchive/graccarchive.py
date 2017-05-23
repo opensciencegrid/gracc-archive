@@ -196,6 +196,7 @@ class ArchiverAgent(object):
         except SystemExit as se:
             print "Cleaning up after systemexit"
             tf.close()
+            gzfile.close()
             yield output_fname
 
 
