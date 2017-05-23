@@ -162,6 +162,7 @@ class ArchiverAgent(object):
                 next_output_fname = self.genFilename(dt)
                 if next_output_fname != output_fname:
                     tf.close()
+                    gzfile.close()
                     print "Switching from %s to %s" % (output_fname, next_output_fname)
                     yield output_fname
                     gzfile = gzip.GzipFile(next_output_fname, 'a')
