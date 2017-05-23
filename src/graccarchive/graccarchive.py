@@ -69,10 +69,10 @@ class ArchiverAgent(object):
         self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
         
         # Start the receiving thread
-        pika_thread = threading.Thread(target=self.startReceiving)
-        pika_thread.daemon = True
-        pika_thread.name = 'RabbitMQ Listener Thread'
-        pika_thread.start()
+        self.pika_thread = threading.Thread(target=self.startReceiving)
+        self.pika_thread.daemon = True
+        self.pika_thread.name = 'RabbitMQ Listener Thread'
+        self.pika_thread.start()
 
         # tarWriter is a generator that generates complete files.
         for source_file in self.tarWriter():
@@ -83,15 +83,18 @@ class ArchiverAgent(object):
 
 
     def createConnection(self):
+        try:
+            self.parameters = pika.URLParameters(self._config['AMQP']['url'])
+            self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
 
-        self.parameters = pika.URLParameters(self._config['AMQP']['url'])
-        self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
-
-        self._chan = self._conn.channel()
-        # TODO: capture exit codes on all these call
-        self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
-        self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
-        self._chan.basic_recover(requeue=True)
+            self._chan = self._conn.channel()
+            # TODO: capture exit codes on all these call
+            self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
+            self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
+            self._chan.basic_recover(requeue=True)
+        except pika.exceptions.ConnectionClosed:
+            print "Connection was closed while setting up connection... exiting"
+            sys.exit(1)
 
 
     def startReceiving(self):
