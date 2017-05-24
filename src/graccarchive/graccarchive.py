@@ -111,11 +111,6 @@ class ArchiverAgent(object):
                 self.createConnection()
                 self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
                 continue
-            except SystemExit as se:
-                print "Cleaning up after systemexit"
-                self.flushFile()
-                self.tf.close()
-                self.gzfile.close()
 
     def receiveMsg(self, channel, method_frame, header_frame, body):
         self.tarWriter(body, method_frame.delivery_tag)
@@ -176,14 +171,20 @@ class ArchiverAgent(object):
         
 
     def flushFile(self):
+        self.gzfile.flush()
         with open(self.output_file, "a") as fp:
             os.fsync(fp.fileno())
-        self.gzfile.flush()
         print "Cleared queue; ack'ing"
         if self.delivery_tag:
             self._chan.basic_ack(self.delivery_tag, multiple=True)
             self.delivery_tag = None
         self.setTimeout()
+        
+    def closeFile(self):
+        if self.tf:
+            self.tf.close()
+        if self.gzfile:
+            self.gzfile.close()
 
 
 def main():
@@ -218,6 +219,13 @@ def main():
     # Create and run the OverMind
     print "Starting the archiver agent."
     archiver_agent = ArchiverAgent(config)
+    # Capture and call sys.exit for SIGTERM commands
+    def exit_gracefully(signum, frame):
+        archiver_agent.flushFile()
+        archiver_agent.closeFile()
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, exit_gracefully)
+    
     archiver_agent.run()
 
 
