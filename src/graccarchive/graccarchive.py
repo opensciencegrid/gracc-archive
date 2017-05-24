@@ -168,7 +168,9 @@ class ArchiverAgent(object):
             os.fsync(fp.fileno())
         self.gzfile.flush()
         print "Cleared queue; ack'ing"
-        self._chan.basic_ack(self.delivery_tag, multiple=True)
+        if self.delivery_tag != None:
+            self._chan.basic_ack(self.delivery_tag, multiple=True)
+            self.delivery_tag = None
 
 
 def main():
