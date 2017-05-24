@@ -67,6 +67,8 @@ class ArchiverAgent(object):
         self.parameters = None
         
         # Initialize the output file
+        now = time.time()
+        dt = datetime.datetime.utcfromtimestamp(now)
         output_fname = self.genFilename(dt)
         self.gzfile = gzip.GzipFile(output_fname, 'a')
         self.output_file = output_fname
