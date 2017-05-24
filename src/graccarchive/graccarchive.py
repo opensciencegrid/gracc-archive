@@ -111,6 +111,11 @@ class ArchiverAgent(object):
                 self.createConnection()
                 self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
                 continue
+            except SystemExit as se:
+                print "Cleaning up after systemexit"
+                self.flushFile()
+                self.tf.close()
+                self.gzfile.close()
 
     def receiveMsg(self, channel, method_frame, header_frame, body):
         self.tarWriter(body, method_frame.delivery_tag)
