@@ -171,6 +171,7 @@ class ArchiverAgent(object):
         if self.delivery_tag:
             self._chan.basic_ack(self.delivery_tag, multiple=True)
             self.delivery_tag = None
+        self._conn.add_timeout(10, self.flushFile)
 
 
 def main():
