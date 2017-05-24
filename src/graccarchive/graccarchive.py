@@ -61,12 +61,16 @@ class ArchiverAgent(object):
         self.message_counter = 0
         self.output_file = None
         self.pw = pwd.getpwnam("nobody")
-        self.tf = None
-        self.gzfile = None
         self.delivery_tag = None
         self._conn = None
         self._chan = None
         self.parameters = None
+        
+        # Initialize the output file
+        output_fname = self.genFilename(dt)
+        self.gzfile = gzip.GzipFile(output_fname, 'a')
+        self.output_file = output_fname
+        self.tf = tarfile.open(fileobj=self.gzfile, mode="w|")
         
     def run(self):
         self.createConnection()
@@ -116,8 +120,12 @@ class ArchiverAgent(object):
         if self.output_file != output_fname:
             return self.tf
 
+        # Move the previous output file
         fname = os.path.split(self.output_file)[-1]
         final_output_fname = os.path.join(self._config['Directories']['output'], fname)
+        # Close all the things
+        self.tf.close()
+        self.gzfile.close()
         print "Copying final archive file from %s to %s" % (self.output_file, final_output_fname)
         move_without_overwrite(self.output_file, final_output_fname)
         self.gzfile = gzip.GzipFile(output_fname, 'a')
