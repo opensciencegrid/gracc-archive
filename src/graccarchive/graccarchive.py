@@ -18,15 +18,12 @@ import os
 import pwd
 import time
 import errno
-import Queue
 import shutil
 import hashlib
-import logging
 import tarfile
 import argparse
 import datetime
 import cStringIO
-import threading
 import signal
 import sys
 import gzip
@@ -61,32 +58,27 @@ class ArchiverAgent(object):
     
     def __init__(self, config):
         self._config = config
-        self.queue = Queue.Queue(maxsize=1000)
         self.message_counter = 0
+        self.output_file = None
+        self.pw = pwd.getpwnam("nobody")
+        self.tf = None
+        self.gzfile = None
+        self.delivery_tag = None
+        self._conn = None
+        self._chan = None
+        self.parameters = None
         
     def run(self):
         self.createConnection()
         self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
-        
-        # Start the receiving thread
-        self.pika_thread = threading.Thread(target=self.startReceiving)
-        self.pika_thread.daemon = True
-        self.pika_thread.name = 'RabbitMQ Listener Thread'
-        self.pika_thread.start()
 
-        # tarWriter is a generator that generates complete files.
-        for source_file in self.tarWriter():
-            fname = os.path.split(source_file)[-1]
-            output_file = os.path.join(self._config['Directories']['output'], fname)
-            print "Copying final archive file from %s to %s" % (source_file, output_file)
-            move_without_overwrite(source_file, output_file)
-
+        self.startReceiving()
 
     def createConnection(self):
         try:
             self.parameters = pika.URLParameters(self._config['AMQP']['url'])
             self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
-
+            self._conn.add_timeout(10, self.flushFile)
             self._chan = self._conn.channel()
             # TODO: capture exit codes on all these call
             self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
@@ -96,9 +88,7 @@ class ArchiverAgent(object):
             print "Connection was closed while setting up connection... exiting"
             sys.exit(1)
 
-
     def startReceiving(self):
-        
         # The library gives us an event loop built-in, so lets use it!
         # This program only responds to messages on the rabbitmq, so no
         # reason to listen to anything else.
@@ -114,93 +104,61 @@ class ArchiverAgent(object):
                 self.createConnection()
                 self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
                 continue
-            
-            
-            
-    
-    def receiveMsg(self, channel, method_frame, header_frame, body):
-        
-        
-        self.message_counter += 1
-        self.queue.put(body)
-        
-        # Every 1000 messages, clear the queue and make sure everything is written
-        if self.message_counter % 1000 == 0:
-            self.queue.join()
-            print "Cleared queue"
-            self._chan.basic_ack(method_frame.delivery_tag, multiple=True)
-            
 
+    def receiveMsg(self, channel, method_frame, header_frame, body):
+        self.tarWriter(body, method_frame.delivery_tag)
 
     def genFilename(self, dt):
         return os.path.join(self._config['Directories']['sandbox'], dt.strftime("gracc-%Y-%m-%d.tar.gz"))
 
-
-    def tarWriter(self):
-        pw = pwd.getpwnam("nobody")
-        counter = 0
-        dt = datetime.datetime.utcnow()
+    def genTarFile(self, dt):
         output_fname = self.genFilename(dt)
-        gzfile = gzip.GzipFile(output_fname, 'a')
-        tf = tarfile.open(fileobj=gzfile, mode="w|")
-        record = None
-        try:
-            while True:
-                try:
-                    record = self.queue.get(block=True, timeout=10)
-                except Queue.Empty as qe:
-                    if record is None:
-                        continue
-                    # Timed out waiting for new updates; let's ACK outstanding requests.
-                    print "No updates in the last 10s; syncing file to disk (count=%d)" % counter
-                    with open(output_fname, "a") as fp:
-                        os.fsync(fp.fileno())
-                    record = None
-                    continue
-                hobj = hashlib.sha256()
-                hobj.update(record)
-                now = time.time()
-                dt = datetime.datetime.utcfromtimestamp(now)
-                formatted_time = dt.strftime("gracc/%Y/%m/%d/%H")
-                next_output_fname = self.genFilename(dt)
-                if next_output_fname != output_fname:
-                    tf.close()
-                    gzfile.close()
-                    print "Switching from %s to %s" % (output_fname, next_output_fname)
-                    yield output_fname
-                    gzfile = gzip.GzipFile(next_output_fname, 'a')
-                    tf = tarfile.open(fileobj=gzfile, mode="w|")
-                    counter = 0
-                    output_fname = next_output_fname
-                fname = "%s/record-%d-%s" % (formatted_time, counter, hobj.hexdigest())
-                ti = tarfile.TarInfo(fname)
-                sio = cStringIO.StringIO()
-                sio.write(record)
-                ti.size = sio.tell()
-                sio.seek(0)
-                ti.uid = pw.pw_uid
-                ti.gid = pw.pw_gid
-                ti.mtime = now
-                ti.mode = 0600
-                tf.addfile(ti, sio)
-                self.queue.task_done()
-                counter += 1
-                if counter % 1000 == 0:
-                    print "Syncing file to disk (count=%d)" % counter
-                    gzfile.flush()
-                    with open(output_fname, "a") as fp:
-                        os.fsync(fp.fileno())
-                    tf.members = []
-            gzfile.flush()
-            with open(output_fname, "a") as fp:
-                os.fsync(fp.fileno())
-            print "Finalized last output file: %s" %  output_fname
-            yield output_fname
-        except SystemExit as se:
-            print "Cleaning up after systemexit"
-            tf.close()
-            gzfile.close()
-            yield output_fname
+        if self.output_file != output_fname:
+            return self.tf
+
+        fname = os.path.split(self.output_file)[-1]
+        final_output_fname = os.path.join(self._config['Directories']['output'], fname)
+        print "Copying final archive file from %s to %s" % (self.output_file, final_output_fname)
+        move_without_overwrite(self.output_file, final_output_fname)
+        self.gzfile = gzip.GzipFile(output_fname, 'a')
+        self.output_file = output_fname
+        self.tf = tarfile.open(fileobj=self.gzfile, mode="w|")
+        return self.tf
+
+    def tarWriter(self, record, delivery_tag):
+        now = time.time()
+        dt = datetime.datetime.utcfromtimestamp(now)
+        tf = self.genTarFile(dt)
+        hobj = hashlib.sha256()
+        hobj.update(record)
+        formatted_time = dt.strftime("gracc/%Y/%m/%d/%H")
+        fname = "%s/record-%d-%s" % (formatted_time, self.message_counter, hobj.hexdigest())
+        ti = tarfile.TarInfo(fname)
+        sio = cStringIO.StringIO()
+        sio.write(record)
+        ti.size = sio.tell()
+        sio.seek(0)
+        ti.uid = self.pw.pw_uid
+        ti.gid = self.pw.pw_gid
+        ti.mtime = now
+        ti.mode = 0600
+        tf.addfile(ti, sio)
+        self.recordTag(delivery_tag)
+
+    def recordTag(self, delivery_tag):
+        self.delivery_tag = delivery_tag
+        self.message_counter += 1
+        if self.message_counter % 1000 == 0:
+            print "Syncing file to disk (count=%d)" % self.message_counter
+            self.tf.members = []
+            self.flushFile()
+
+    def flushFile(self):
+        with open(self.output_file, "a") as fp:
+            os.fsync(fp.fileno())
+        self.gzfile.flush()
+        print "Cleared queue; ack'ing"
+        self._chan.basic_ack(self.delivery_tag, multiple=True)
 
 
 def main():
