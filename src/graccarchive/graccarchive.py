@@ -65,6 +65,7 @@ class ArchiverAgent(object):
         self._conn = None
         self._chan = None
         self.parameters = None
+        self.timer_id = None
         
         # Initialize the output file
         now = time.time()
@@ -84,7 +85,7 @@ class ArchiverAgent(object):
         try:
             self.parameters = pika.URLParameters(self._config['AMQP']['url'])
             self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
-            self._conn.add_timeout(10, self.flushFile)
+            self.setTimeout()
             self._chan = self._conn.channel()
             # TODO: capture exit codes on all these call
             self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
@@ -163,6 +164,12 @@ class ArchiverAgent(object):
             self.tf.members = []
             self.flushFile()
 
+    def setTimeout(self):
+        if self.timer_id:
+            self._conn.remove_timeout(self.timer_id)
+        self.timer_id = self._conn.add_timeout(10, self.flushFile)
+        
+
     def flushFile(self):
         with open(self.output_file, "a") as fp:
             os.fsync(fp.fileno())
@@ -171,7 +178,7 @@ class ArchiverAgent(object):
         if self.delivery_tag:
             self._chan.basic_ack(self.delivery_tag, multiple=True)
             self.delivery_tag = None
-        self._conn.add_timeout(10, self.flushFile)
+        self.setTimeout()
 
 
 def main():
