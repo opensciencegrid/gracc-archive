@@ -119,7 +119,7 @@ class ArchiverAgent(object):
 
     def genTarFile(self, dt):
         output_fname = self.genFilename(dt)
-        if self.output_file != output_fname:
+        if self.output_file == output_fname:
             return self.tf
 
         # Move the previous output file
