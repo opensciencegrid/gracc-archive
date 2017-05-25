@@ -1,6 +1,4 @@
-from setuptools import setup, find_packages
-import os
-
+from setuptools import setup
 
 setup(name='graccarchive',
       version='1.4.0',
