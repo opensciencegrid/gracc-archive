@@ -3,7 +3,7 @@ import os
 
 
 setup(name='graccarchive',
-      version='1.3.1',
+      version='1.4.0',
       description='GRACC Archive Agent',
       author_email='dweitzel@cse.unl.edu',
       author='Derek Weitzel',
