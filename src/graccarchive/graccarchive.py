@@ -75,6 +75,8 @@ class ArchiverAgent(object):
         self.output_file = output_fname
         self.tf = tarfile.open(fileobj=self.gzfile, mode="w|")
         
+        self._timeoutFunc()
+        
     def run(self):
         self.createConnection()
         self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
@@ -85,7 +87,6 @@ class ArchiverAgent(object):
         try:
             self.parameters = pika.URLParameters(self._config['AMQP']['url'])
             self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
-            self.setTimeout()
             self._chan = self._conn.channel()
             # TODO: capture exit codes on all these call
             self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
@@ -163,12 +164,10 @@ class ArchiverAgent(object):
             print "Syncing file to disk (count=%d)" % self.message_counter
             self.tf.members = []
             self.flushFile()
-
-    def setTimeout(self):
-        if self.timer_id:
-            self._conn.remove_timeout(self.timer_id)
-        self.timer_id = self._conn.add_timeout(10, self.flushFile)
         
+    def _timeoutFunc(self):
+        self.flushFile()
+        self.timer_id = self._conn.add_timeout(10, self._timeoutFunc)
 
     def flushFile(self):
         self.gzfile.flush()
@@ -178,7 +177,6 @@ class ArchiverAgent(object):
         if self.delivery_tag:
             self._chan.basic_ack(self.delivery_tag, multiple=True)
             self.delivery_tag = None
-        self.setTimeout()
         
     def closeFile(self):
         if self.tf:
@@ -204,11 +202,6 @@ def main():
 
     if args.dev:
         config.setdefault('AMQP', {})['auto_delete'] = 'true'
-
-    # Capture and call sys.exit for SIGTERM commands
-    def exit_gracefully(signum, frame):
-        sys.exit(0)
-    signal.signal(signal.SIGTERM, exit_gracefully)
 
     # Move any previous file to the output directory; we cannot append currently.
     for fname in os.listdir(config['Directories']['sandbox']):
