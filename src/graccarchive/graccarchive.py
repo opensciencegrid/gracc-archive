@@ -75,11 +75,11 @@ class ArchiverAgent(object):
         self.output_file = output_fname
         self.tf = tarfile.open(fileobj=self.gzfile, mode="w|")
         
-        self._timeoutFunc()
         
     def run(self):
         self.createConnection()
         self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
+        self._timeoutFunc()
 
         self.startReceiving()
 
