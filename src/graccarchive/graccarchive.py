@@ -79,7 +79,6 @@ class ArchiverAgent(object):
     def run(self):
         self.createConnection()
         self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
-        self._timeoutFunc()
 
         self.startReceiving()
 
@@ -87,6 +86,7 @@ class ArchiverAgent(object):
         try:
             self.parameters = pika.URLParameters(self._config['AMQP']['url'])
             self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
+            self._timeoutFunc()
             self._chan = self._conn.channel()
             # TODO: capture exit codes on all these call
             self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
