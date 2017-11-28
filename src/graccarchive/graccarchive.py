@@ -66,6 +66,7 @@ class ArchiverAgent(object):
         self._chan = None
         self.parameters = None
         self.timer_id = None
+        self._closing = False
         
         # Initialize the output file
         now = time.time()
@@ -78,40 +79,148 @@ class ArchiverAgent(object):
         
     def run(self):
         self.createConnection()
-        self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
+        self._conn.ioloop.start()
 
-        self.startReceiving()
 
     def createConnection(self):
         try:
+            print "Creating connection"
             self.parameters = pika.URLParameters(self._config['AMQP']['url'])
-            self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
-            self._timeoutFunc()
-            self._chan = self._conn.channel()
-            # TODO: capture exit codes on all these call
-            self._chan.queue_declare(queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
-            self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
-            self._chan.basic_recover(requeue=True)
+            #self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
+            self._conn = pika.SelectConnection(self.parameters,
+                                     self.on_connection_open,
+                                     stop_ioloop_on_close=False)
+            return self._conn
+            
         except pika.exceptions.ConnectionClosed:
             print "Connection was closed while setting up connection... exiting"
             sys.exit(1)
+            
+    def on_connection_closed(self, connection, reply_code, reply_text):
+        """This method is invoked by pika when the connection to RabbitMQ is
+        closed unexpectedly. Since it is unexpected, we will reconnect to
+        RabbitMQ if it disconnects.
 
-    def startReceiving(self):
-        # The library gives us an event loop built-in, so lets use it!
-        # This program only responds to messages on the rabbitmq, so no
-        # reason to listen to anything else.
-        while True:
-            try:
-                print "Starting to consume data from queue", self._config['AMQP']['queue']
-                self._chan.start_consuming()
-            except KeyboardInterrupt:
-                self._chan.stop_consuming()
-                break
-            except pika.exceptions.ConnectionClosed:
-                print "Connection was closed, re-opening"
-                self.createConnection()
-                self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
-                continue
+        :param pika.connection.Connection connection: The closed connection obj
+        :param int reply_code: The server provided reply_code if given
+        :param str reply_text: The server provided reply_text if given
+
+        """
+        self._chan = None
+        if self._closing:
+            self._con.ioloop.stop()
+        else:
+            print('Connection closed, reopening in 5 seconds: (%s) %s',
+                           reply_code, reply_text)
+            self._conn.add_timeout(5, self.reconnect)
+    
+    def reconnect(self):
+        """Will be invoked by the IOLoop timer if the connection is
+        closed. See the on_connection_closed method.
+
+        """
+        # This is the old connection IOLoop instance, stop its ioloop
+        self._conn.ioloop.stop()
+
+        if not self._closing:
+
+            # Create a new connection
+            self._conn = self.connect()
+
+            # There is now a new connection, needs a new ioloop to run
+            self._conn.ioloop.start()
+
+    def on_connection_open(self, unused_connection):
+        print("Conneciton opened")
+        self._timeoutFunc()
+        self._conn.add_on_close_callback(self.on_connection_closed)
+        self._chan = self._conn.channel(self.on_channel_open)
+        
+
+    def on_channel_open(self, channel):
+        print("Channel opened")
+        self._chan = channel
+        self._chan.basic_qos(prefetch_count=2000)
+        self._chan.add_on_close_callback(self.on_channel_closed)
+        self.setup_queue()
+
+    def on_channel_closed(self, channel, reply_code, reply_text):
+        """Invoked by pika when RabbitMQ unexpectedly closes the channel.
+        Channels are usually closed if you attempt to do something that
+        violates the protocol, such as re-declare an exchange or queue with
+        different parameters. In this case, we'll close the connection
+        to shutdown the object.
+
+        :param pika.channel.Channel: The closed channel
+        :param int reply_code: The numeric reason the channel was closed
+        :param str reply_text: The text reason the channel was closed
+
+        """
+        print('Channel %i was closed: (%s) %s',
+                       channel, reply_code, reply_text)
+        self._conn.close()
+
+    def setup_queue(self):
+        """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
+        command. When it is complete, the on_queue_declareok method will
+        be invoked by pika.
+
+        :param str|unicode queue_name: The name of the queue to declare.
+
+        """
+        self._chan.queue_declare(self.on_queue_declareok, queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
+
+    def on_queue_declareok(self, method_frame):
+        """Method invoked by pika when the Queue.Declare RPC call made in
+        setup_queue has completed. In this method we will bind the queue
+        and exchange together with the routing key by issuing the Queue.Bind
+        RPC command. When this command is complete, the on_bindok method will
+        be invoked by pika.
+
+        :param pika.frame.Method method_frame: The Queue.DeclareOk frame
+
+        """
+        print("Queue declare ok")
+        self._chan.queue_bind(self.on_bindok, self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
+
+    def on_bindok(self, unused_frame):
+        """Invoked by pika when the Queue.Bind method has completed. At this
+        point we will start consuming messages by calling start_consuming
+        which will invoke the needed RPC commands to start the process.
+
+        :param pika.frame.Method unused_frame: The Queue.BindOk response frame
+
+        """
+        print("Bind ok")
+        self._chan.basic_recover(requeue=True)
+        self.start_consuming()
+        
+        
+    def start_consuming(self):
+        """This method sets up the consumer by first calling
+        add_on_cancel_callback so that the object is notified if RabbitMQ
+        cancels the consumer. It then issues the Basic.Consume RPC command
+        which returns the consumer tag that is used to uniquely identify the
+        consumer with RabbitMQ. We keep the value to use it when we want to
+        cancel consuming. The on_message method is passed in as a callback pika
+        will invoke when a message is fully received.
+
+        """
+        print("Starting consuming")
+        self._chan.add_on_cancel_callback(self.on_consumer_cancelled)
+        self._consumer_tag = self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
+
+    def on_consumer_cancelled(self, method_frame):
+        """Invoked by pika when RabbitMQ sends a Basic.Cancel for a consumer
+        receiving messages.
+
+        :param pika.frame.Method method_frame: The Basic.Cancel frame
+
+        """
+        print('Consumer was cancelled remotely, shutting down: %r',
+                    method_frame)
+        if self._chan:
+            self._chan.close()
 
     def receiveMsg(self, channel, method_frame, header_frame, body):
         self.tarWriter(body, method_frame.delivery_tag)
