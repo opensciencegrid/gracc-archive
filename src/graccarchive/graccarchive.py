@@ -125,7 +125,7 @@ class ArchiverAgent(object):
         if not self._closing:
 
             # Create a new connection
-            self._conn = self.connect()
+            self._conn = self.createConnection()
 
             # There is now a new connection, needs a new ioloop to run
             self._conn.ioloop.start()
@@ -271,8 +271,8 @@ class ArchiverAgent(object):
         self.message_counter += 1
         if self.message_counter % 1000 == 0:
             print "Syncing file to disk (count=%d)" % self.message_counter
-            self.tf.members = []
             self.flushFile()
+            self.tf.members = []
         
     def _timeoutFunc(self):
         self.flushFile()
@@ -282,7 +282,7 @@ class ArchiverAgent(object):
         self.gzfile.flush()
         with open(self.output_file, "a") as fp:
             os.fsync(fp.fileno())
-        print "Cleared queue; ack'ing"
+        print "Cleared queue; ack'ing: %i" % self.message_counter
         if self.delivery_tag:
             self._chan.basic_ack(self.delivery_tag, multiple=True)
             self.delivery_tag = None
