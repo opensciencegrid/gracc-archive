@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='graccarchive',
-      version='1.4.1',
+      version='1.5.0',
       description='GRACC Archive Agent',
       author_email='dweitzel@cse.unl.edu',
       author='Derek Weitzel',

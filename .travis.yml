@@ -2,18 +2,21 @@ sudo: required
 env:
   matrix:
   - OS_TYPE=centos OS_VERSION=7
-  
 services:
-  - docker
-  
+- docker
 before_install:
-  - sudo apt-get update
-  - echo 'DOCKER_OPTS="-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -s devicemapper"' | sudo tee /etc/default/docker > /dev/null
-  - sudo service docker restart
-  - sleep 5
-  - sudo docker pull centos:centos${OS_VERSION}
-
-  
+- sudo apt-get update
+- echo 'DOCKER_OPTS="-H tcp://127.0.0.1:2375 -H unix:///var/run/docker.sock -s devicemapper"'
+  | sudo tee /etc/default/docker > /dev/null
+- sudo service docker restart
+- sleep 5
+- sudo docker pull centos:centos${OS_VERSION}
 script:
- # Run tests in Container
 - tests/setup_tests.sh ${OS_VERSION}
+deploy:
+  provider: pypi
+  user: djw8605
+  password:
+    secure: jOrLVk032K1Rq/+lNDC98oby7T4vxL+7hjZ4OVqgmUWBzvrFI+xU+aKG8Uo7DCQPe7v6GdvXHMBah873YsNSR/8urY1/KuYbPQv7Snvp8amKkwNh++aryNzjQuBnsoTO2Jvz8TIsxDg4xZEvxsCHa0VM+N0UFkS5i+5n3JBBhw9QG+fvujdv5zyZc8MyRYEwZXfIQXg3428znuYsfA4JYPeoUMn/+QfIN3lNldLXjDkaTp5GNyDzo0mUdlOePBYbQKprEHN0HG5TGx5q0lNrXbelfUBKiiE3LCE4Vz3tvF2aGkFn1ogeIwbdRiIs46MGe+S6QUcQIajWlDzzG7n/vctGvwsML4XpNAQu64UkSplzdp67Wc908oiPtSv5e8KIr9klyCdooGfGHfEV5rxBcPPjbikNexqZ2xWqpO/DtEYKQEePeV9EhCNKzBII9rG7f3921cf1he+96BNJNkFTXnCxiLPSwwcoF8lWRG4ufMH13L3fn2EDjTsUjKcuvkacUq7V3Cm4AniIoQR2vmDEmiTr0iDjyEFUkoi5RJN70OLcxPodOVUAUFyco5a0ZvyHN9CAddN+nvgznIKpXG21tjSoLJ+2hIm16IZ00uwlAx04kzV5i50lWV67WG2HPQf9PRgyoUHwC/dbuuIP5klGIjah86DLdVHri1mzVrJHUGU=
+  on:
+    tags: true
