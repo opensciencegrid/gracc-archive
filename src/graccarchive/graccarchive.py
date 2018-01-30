@@ -27,6 +27,7 @@ import cStringIO
 import signal
 import sys
 import gzip
+import socket
 
 import pika
 import pika.exceptions
@@ -226,7 +227,7 @@ class ArchiverAgent(object):
         self.tarWriter(body, method_frame.delivery_tag)
 
     def genFilename(self, dt):
-        return os.path.join(self._config['Directories']['sandbox'], dt.strftime("gracc-%Y-%m-%d.tar.gz"))
+        return os.path.join(self._config['Directories']['sandbox'], "gracc-{0}-{1}.tar.gz".format(socket.gethostname(), dt.strftime("%Y-%m-%d")))
 
     def genTarFile(self, dt):
         output_fname = self.genFilename(dt)
