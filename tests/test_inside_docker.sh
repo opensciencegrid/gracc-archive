@@ -64,8 +64,6 @@ set -e
 popd
 
 sleep 60
-journalctl -u graccreq.service --no-pager -n 1000
-journalctl -u graccarchive@test.service --no-pager -n 1000
 
 # Now that we have data in the archive, restart it
 ls -lRh /var/lib/graccarchive/
@@ -73,8 +71,6 @@ systemctl restart graccarchive@test.service
 
 sleep 2
 ls -lRh /var/lib/graccarchive/
-
-journalctl -u graccarchive@test.service --no-pager -n 1000
 
 # Ok, there should be file in /var/lib/graccarchive/output, unarchive it!
 graccunarchiver "amqp://guest:guest@localhost/" gracc.osg.raw /var/lib/graccarchive/output/*
