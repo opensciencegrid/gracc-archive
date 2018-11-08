@@ -45,9 +45,9 @@ sleep 10
 journalctl -u graccarchive@test.service --no-pager
 
 # Install the test data
-curl -O https://nodejs.org/dist/v4.4.4/node-v4.4.4-linux-x64.tar.xz
-tar xf node-v4.4.4-linux-x64.tar.xz
-export PATH=$PATH:`pwd`/node-v4.4.4-linux-x64/bin
+curl -O https://nodejs.org/dist/v8.11.1/node-v8.11.1-linux-x64.tar.xz
+tar xf node-v8.11.1-linux-x64.tar.xz
+export PATH=$PATH:`pwd`/node-v8.11.1-linux-x64/bin
 npm install elasticdump -g
 
 git clone https://github.com/djw8605/gracc-test-data.git
@@ -64,8 +64,6 @@ set -e
 popd
 
 sleep 60
-journalctl -u graccreq.service --no-pager -n 1000
-journalctl -u graccarchive@test.service --no-pager -n 1000
 
 # Now that we have data in the archive, restart it
 ls -lRh /var/lib/graccarchive/
@@ -73,8 +71,6 @@ systemctl restart graccarchive@test.service
 
 sleep 2
 ls -lRh /var/lib/graccarchive/
-
-journalctl -u graccarchive@test.service --no-pager -n 1000
 
 # Ok, there should be file in /var/lib/graccarchive/output, unarchive it!
 graccunarchiver "amqp://guest:guest@localhost/" gracc.osg.raw /var/lib/graccarchive/output/*
