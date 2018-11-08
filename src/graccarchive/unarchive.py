@@ -16,6 +16,7 @@
 import tarfile
 import argparse
 import pika
+import json
 
 
 class UnArchiver(object):
@@ -45,7 +46,22 @@ class UnArchiver(object):
         tf.close()
         
         
+class PerfSonarUnArchiver(UnArchiver):
+    """
+    Subclass of the UnArchiver in order to send PS data
+    """
+    def __init__(self, url, exchange):
+        super(PerfSonarUnArchiver, self).__init__(url, exchange)
 
+    def sendRecord(self, record):
+        # Parse the json record, looking for the "event-type"
+        json_record = json.loads(record)
+        event_type = json_record['meta']['event-type']
+
+        # Prepend the "perfsonar.raw." to the event-type
+        routing_key = "perfsonar.raw." + event_type
+
+        self._chan.basic_publish(exchange=self.exchange, routing_key=routing_key, body=record)
 
 
 def main():
@@ -55,11 +71,15 @@ def main():
     parser.add_argument("rabbiturl", help="Rabbit URL Parameters")
     parser.add_argument("exchange", help="Exchange to send records")
     parser.add_argument("tarfile", nargs='+', help="Tar Files to parse and send")
+    parser.add_argument("-p", "--psdata", help="Unarchive perfsonar data", action='store_true')
     
     args = parser.parse_args()
     print args
     
-    unarchive = UnArchiver(args.rabbiturl, args.exchange)
+    if args.psdata:
+        unarchive = PerfSonarUnArchiver(args.rabbiturl, args.exchange)
+    else:
+        unarchive = UnArchiver(args.rabbiturl, args.exchange)
     unarchive.createConnection()
     
     for tar_file in args.tarfile:
