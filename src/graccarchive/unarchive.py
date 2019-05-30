@@ -35,13 +35,24 @@ class UnArchiver(object):
     def sendRecord(self, record):
         self._chan.basic_publish(exchange=self.exchange, routing_key='', body=record)
         
-    def parseTarFile(self, tar_file):
+    def parseTarFile(self, tar_file, start=0):
         tf = tarfile.open(tar_file, mode='r')
-        
+
+        counter = 0
         # For each file in the tar file:
         for member in tf:
+            if counter < start:
+                counter += 1
+                if (counter % 10000) == 0:
+                    print("Skipping {} records".format(counter))
+                    tf.members = []
+                continue
             f = tf.extractfile(member)
             self.sendRecord(f.read())
+            counter += 1
+            if (counter % 10000) == 0:
+                print("Unpacked and sent {} records".format(counter))
+                tf.members = []
         
         tf.close()
         
@@ -72,6 +83,7 @@ def main():
     parser.add_argument("exchange", help="Exchange to send records")
     parser.add_argument("tarfile", nargs='+', help="Tar Files to parse and send")
     parser.add_argument("-p", "--psdata", help="Unarchive perfsonar data", action='store_true')
+    parser.add_argument("-s", "--start", help="Record number to start sending", type=int, default=0)
     
     args = parser.parse_args()
     print args
@@ -84,7 +96,7 @@ def main():
     
     for tar_file in args.tarfile:
         print "Parsing %s" % tar_file
-        unarchive.parseTarFile(tar_file)
+        unarchive.parseTarFile(tar_file, start=args.start)
 
     
 
