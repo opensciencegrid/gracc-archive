@@ -23,11 +23,12 @@ import pika
 
 class UnArchiver(object):
 
-    def __init__(self, url, exchange, start_date=None, end_date=None):
+    def __init__(self, url, exchange, start_date=None, end_date=None, sleep=0):
         self.url = url
         self.exchange = exchange
         self.start_date = start_date
         self.end_date = end_date
+        self.sleep = sleep
         pass
 
     def createConnection(self):
@@ -82,6 +83,11 @@ class UnArchiver(object):
             if self.dateFilter(record):
                 self.sendRecord(record)
                 sent_counter += 1
+
+                # Sleep between batches
+                if self.sleep and (sent_counter % 10000) == 0:
+                    self._conn.sleep(self.sleep)
+
             counter += 1
             if (counter % 10000) == 0:
                 self._conn.process_data_events()
@@ -95,8 +101,8 @@ class PerfSonarUnArchiver(UnArchiver):
     """
     Subclass of the UnArchiver in order to send PS data
     """
-    def __init__(self, url, exchange, start_date=None, end_date=None):
-        super(PerfSonarUnArchiver, self).__init__(url, exchange, start_date, end_date)
+    def __init__(self, url, exchange, start_date=None, end_date=None, sleep=0):
+        super(PerfSonarUnArchiver, self).__init__(url, exchange, start_date, end_date, sleep)
 
     def sendRecord(self, record):
         # Parse the json record, looking for the "event-type"
@@ -120,13 +126,14 @@ def main():
     parser.add_argument("-s", "--start", help="Record number to start sending", type=int, default=0)
     parser.add_argument("--start-date", help="Select records on or after the specified date (UTC ISO-8601)", type=dateutil.parser.parse)
     parser.add_argument("--end-date", help="Select records before the specified date (UTC ISO-8601)", type=dateutil.parser.parse)
+    parser.add_argument("--sleep", help="Seconds to sleep between 10k record batches", type=int, default=7)
 
     args = parser.parse_args()
 
     if args.psdata:
-        unarchive = PerfSonarUnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date)
+        unarchive = PerfSonarUnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date, args.sleep)
     else:
-        unarchive = UnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date)
+        unarchive = UnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date, args.sleep)
     unarchive.createConnection()
 
     for tar_file in args.tarfile:
