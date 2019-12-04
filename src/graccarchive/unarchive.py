@@ -73,6 +73,7 @@ class UnArchiver(object):
             if counter < start:
                 counter += 1
                 if (counter % 10000) == 0:
+                    self._conn.process_data_events()
                     print("Skipping {} records".format(counter))
                     tf.members = []
                 continue
@@ -83,6 +84,7 @@ class UnArchiver(object):
                 sent_counter += 1
             counter += 1
             if (counter % 10000) == 0:
+                self._conn.process_data_events()
                 print("Processed {} records and sent {} records".format(counter, sent_counter))
                 tf.members = []
 
