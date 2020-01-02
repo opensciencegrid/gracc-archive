@@ -29,6 +29,7 @@ class UnArchiver(object):
         self.start_date = start_date
         self.end_date = end_date
         self.sleep = sleep
+        self.batch_size = 10000
         pass
 
     def createConnection(self):
@@ -73,7 +74,7 @@ class UnArchiver(object):
         for member in tf:
             if counter < start:
                 counter += 1
-                if (counter % 10000) == 0:
+                if (counter % self.batch_size) == 0:
                     self._conn.process_data_events()
                     print("Skipping {} records".format(counter))
                     tf.members = []
@@ -85,11 +86,11 @@ class UnArchiver(object):
                 sent_counter += 1
 
                 # Sleep between batches
-                if self.sleep and (sent_counter % 10000) == 0:
+                if self.sleep and (sent_counter % self.batch_size) == 0:
                     self._conn.sleep(self.sleep)
 
             counter += 1
-            if (counter % 10000) == 0:
+            if (counter % self.batch_size) == 0:
                 self._conn.process_data_events()
                 print("Processed {} records and sent {} records".format(counter, sent_counter))
                 tf.members = []
