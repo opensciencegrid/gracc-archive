@@ -18,19 +18,26 @@ import datetime
 import json
 import tarfile
 import dateutil.parser
+import requests
+import urllib3.util
 import pika
 
 
 class UnArchiver(object):
 
-    def __init__(self, url, exchange, start_date=None, end_date=None, sleep=0):
+    def __init__(self, url, exchange, start_date=None, end_date=None, sleep=0, low_water=None, high_water=None):
         self.url = url
         self.exchange = exchange
         self.start_date = start_date
         self.end_date = end_date
         self.sleep = sleep
+        self.low_water = low_water
+        self.high_water = high_water
         self.batch_size = 10000
-        pass
+
+        # Make RabbitMQ REST API URL from AMQP URL
+        u_parse = urllib3.util.parse_url(url)
+        self.api_url = urllib3.util.url.Url('https', u_parse.auth, u_parse.hostname, None, '/api/queues' + u_parse.path).url
 
     def createConnection(self):
         self.parameters = pika.URLParameters(self.url)
@@ -65,6 +72,38 @@ class UnArchiver(object):
             return False
         return True
 
+    def getMsgInQueue(self):
+        '''Query RabbitMQ API and return total number of messages in queue'''
+        # Get stats JSON from API
+        qstats = requests.get(self.api_url).json()
+
+        # Sum the waiting messages for all queues
+        msg_count = sum([c['messages'] for c in qstats])
+
+        return msg_count
+
+    def batchSleep(self):
+        '''Sleep between message batches'''
+        # Get the number of messages
+        msg_count = self.getMsgInQueue()
+
+        # We're below the LWM. No delay.
+        if msg_count < self.low_water:
+            print("Message count of {} is below low-water mark of {}. Continuing.".format(msg_count, self.low_water))
+            return
+
+        # We're below the HWM. Sleep and continue sending.
+        if msg_count < self.high_water:
+            print("Message count of {} is above low-water mark of {}. Sleeping.".format(msg_count, self.low_water))
+            self._conn.sleep(self.sleep)
+            return
+
+        # We're above the HWM. Stop sending for an additional 2x sleep and then check again
+        while msg_count > self.high_water:
+            print("Message count of {} is above high-water mark of {}. Waiting to recheck.".format(msg_count, self.high_water))
+            self._conn.sleep(2*self.sleep)
+            msg_count = self.getMsgInQueue()
+
     def parseTarFile(self, tar_file, start=0):
         tf = tarfile.open(tar_file, mode='r')
 
@@ -87,7 +126,7 @@ class UnArchiver(object):
 
                 # Sleep between batches
                 if self.sleep and (sent_counter % self.batch_size) == 0:
-                    self._conn.sleep(self.sleep)
+                    self.batchSleep()
 
             counter += 1
             if (counter % self.batch_size) == 0:
@@ -102,8 +141,8 @@ class PerfSonarUnArchiver(UnArchiver):
     """
     Subclass of the UnArchiver in order to send PS data
     """
-    def __init__(self, url, exchange, start_date=None, end_date=None, sleep=0):
-        super(PerfSonarUnArchiver, self).__init__(url, exchange, start_date, end_date, sleep)
+    def __init__(self, url, exchange, start_date=None, end_date=None, sleep=0, low_water=None, high_water=None):
+        super(PerfSonarUnArchiver, self).__init__(url, exchange, start_date, end_date, sleep, low_water, high_water)
 
     def sendRecord(self, record):
         # Parse the json record, looking for the "event-type"
@@ -127,14 +166,16 @@ def main():
     parser.add_argument("-s", "--start", help="Record number to start sending", type=int, default=0)
     parser.add_argument("--start-date", help="Select records on or after the specified date (UTC ISO-8601)", type=dateutil.parser.parse)
     parser.add_argument("--end-date", help="Select records before the specified date (UTC ISO-8601)", type=dateutil.parser.parse)
-    parser.add_argument("--sleep", help="Seconds to sleep between 10k record batches", type=int, default=7)
+    parser.add_argument("--sleep", help="Seconds to sleep between record batches (default: %(default)s, 0 to disable delays and rate limits)", type=int, default=7)
+    parser.add_argument("--low-water", help="Lower MQ length, where sending is not delayed (default: %(default)s)", type=int, default=10000)
+    parser.add_argument("--high-water", help="Upper MQ length, where sending is stopped (default: %(default)s)", type=int, default=15000)
 
     args = parser.parse_args()
 
     if args.psdata:
-        unarchive = PerfSonarUnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date, args.sleep)
+        unarchive = PerfSonarUnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date, args.sleep, args.low_water, args.high_water)
     else:
-        unarchive = UnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date, args.sleep)
+        unarchive = UnArchiver(args.rabbiturl, args.exchange, args.start_date, args.end_date, args.sleep, args.low_water, args.high_water)
     unarchive.createConnection()
 
     for tar_file in args.tarfile:
