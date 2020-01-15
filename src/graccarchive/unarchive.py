@@ -74,11 +74,14 @@ class UnArchiver(object):
 
     def getMsgInQueue(self):
         '''Query RabbitMQ API and return total number of messages in queue'''
-        # Get stats JSON from API
-        qstats = requests.get(self.api_url).json()
+        # Request stats from API
+        resp = requests.get(self.api_url)
+
+        if resp.status_code != requests.codes.ok:
+            return None
 
         # Sum the waiting messages for all queues
-        msg_count = sum([c['messages'] for c in qstats])
+        msg_count = sum([c['messages'] for c in resp.json()])
 
         return msg_count
 
@@ -86,6 +89,11 @@ class UnArchiver(object):
         '''Sleep between message batches'''
         # Get the number of messages
         msg_count = self.getMsgInQueue()
+
+        while msg_count is None:
+            print("RabbitMQ API error. Waiting to recheck.".format(msg_count, self.high_water))
+            self._conn.sleep(2*self.sleep)
+            msg_count = self.getMsgInQueue()
 
         # We're below the LWM. No delay.
         if msg_count < self.low_water:
