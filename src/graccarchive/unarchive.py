@@ -38,6 +38,8 @@ class UnArchiver(object):
         # Make RabbitMQ REST API URL from AMQP URL
         u_parse = urllib3.util.parse_url(url)
         self.api_url = urllib3.util.url.Url('https', u_parse.auth, u_parse.hostname, None, '/api/queues' + u_parse.path).url
+        # Use a session for connection pooling
+        self.session = requests.Session()
 
     def createConnection(self):
         self.parameters = pika.URLParameters(self.url)
@@ -73,27 +75,26 @@ class UnArchiver(object):
         return True
 
     def getMsgInQueue(self):
-        '''Query RabbitMQ API and return total number of messages in queue'''
-        # Request stats from API
-        resp = requests.get(self.api_url)
+        '''Query RabbitMQ API and return total number of messages in queue. Retries as needed.'''
+        while True:
+            try:
+                # Request stats from API
+                resp = self.session.get(self.api_url)
+                resp.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                print('RabbitMQ API error. Waiting to recheck.')
+                print(e)
+                self._conn.sleep(60)
+                continue
 
-        if resp.status_code != requests.codes.ok:
-            return None
-
-        # Sum the waiting messages for all queues
-        msg_count = sum([c['messages'] for c in resp.json()])
-
-        return msg_count
+            # Sum the waiting messages for all queues
+            msg_count = sum([c['messages'] for c in resp.json()])
+            return msg_count
 
     def batchSleep(self):
         '''Sleep between message batches'''
         # Get the number of messages
         msg_count = self.getMsgInQueue()
-
-        while msg_count is None:
-            print("RabbitMQ API error. Waiting to recheck.".format(msg_count, self.high_water))
-            self._conn.sleep(2*self.sleep)
-            msg_count = self.getMsgInQueue()
 
         # We're below the LWM. No delay.
         if msg_count < self.low_water:
