@@ -81,15 +81,16 @@ class UnArchiver(object):
                 # Request stats from API
                 resp = self.session.get(self.api_url)
                 resp.raise_for_status()
-            except requests.exceptions.RequestException as e:
+
+                # Sum the waiting messages for all queues
+                # API might return OK, but not have a 'messages' key
+                msg_count = sum([c['messages'] for c in resp.json()])
+                return msg_count
+            except (requests.exceptions.RequestException, KeyError) as e:
                 print('RabbitMQ API error. Waiting to recheck.')
                 print(e)
                 self._conn.sleep(60)
                 continue
-
-            # Sum the waiting messages for all queues
-            msg_count = sum([c['messages'] for c in resp.json()])
-            return msg_count
 
     def batchSleep(self):
         '''Sleep between message batches'''
