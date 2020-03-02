@@ -9,10 +9,10 @@ setup(name='graccarchive',
       package_dir={'': 'src'},
       packages=['graccarchive'],
       install_requires=['pika',
-      'six',
+      'python-dateutil',
+      'requests',
       'toml',
       'urllib3',
-      'wsgiref'
       ],
       entry_points= {
             'console_scripts': [
