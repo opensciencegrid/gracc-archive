@@ -131,8 +131,9 @@ class UnArchiver(object):
             f = tf.extractfile(member)
             record = f.read()
             if self.dateFilter(record):
-                self.sendRecord(record)
-                sent_counter += 1
+                sent, error = self.sendRecord(record)
+                if sent:
+                    sent_counter += 1
 
                 # Sleep between batches
                 if self.sleep and (sent_counter % self.batch_size) == 0:
@@ -157,12 +158,16 @@ class PerfSonarUnArchiver(UnArchiver):
     def sendRecord(self, record):
         # Parse the json record, looking for the "event-type"
         json_record = json.loads(record)
-        event_type = json_record['meta']['event-type']
+        try:
+            event_type = json_record['meta']['event-type']
+        except KeyError as ke:
+            return False, ke
 
         # Prepend the "perfsonar.raw." to the event-type
         routing_key = "perfsonar.raw." + event_type
 
         self._chan.basic_publish(exchange=self.exchange, routing_key=routing_key, body=record)
+        return True, None
 
 
 def main():
