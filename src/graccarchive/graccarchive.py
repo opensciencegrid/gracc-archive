@@ -23,7 +23,7 @@ import hashlib
 import tarfile
 import argparse
 import datetime
-import cStringIO
+import io
 import signal
 import sys
 import gzip
@@ -85,19 +85,19 @@ class ArchiverAgent(object):
 
     def createConnection(self):
         try:
-            print "Creating connection"
+            print("Creating connection")
             self.parameters = pika.URLParameters(self._config['AMQP']['url'])
             #self._conn = pika.adapters.blocking_connection.BlockingConnection(self.parameters)
             self._conn = pika.SelectConnection(self.parameters,
-                                     self.on_connection_open,
-                                     stop_ioloop_on_close=False)
+                                     on_open_callback=self.on_connection_open)
+            #                         on_close_callback=self.on_connection_closed)
             return self._conn
             
         except pika.exceptions.ConnectionClosed:
-            print "Connection was closed while setting up connection... exiting"
+            print("Connection was closed while setting up connection... exiting")
             sys.exit(1)
             
-    def on_connection_closed(self, connection, reply_code, reply_text):
+    def on_connection_closed(self, connection, ex: Exception):
         """This method is invoked by pika when the connection to RabbitMQ is
         closed unexpectedly. Since it is unexpected, we will reconnect to
         RabbitMQ if it disconnects.
@@ -109,11 +109,11 @@ class ArchiverAgent(object):
         """
         self._chan = None
         if self._closing:
-            self._con.ioloop.stop()
+            self._conn.ioloop.stop()
         else:
-            print('Connection closed, reopening in 5 seconds: (%s) %s',
-                           reply_code, reply_text)
-            self._conn.add_timeout(5, self.reconnect)
+            print(('Connection closed, reopening in 5 seconds: %s',
+                           str(ex)))
+            self._conn.ioloop.call_later(5, self.reconnect)
     
     def reconnect(self):
         """Will be invoked by the IOLoop timer if the connection is
@@ -135,7 +135,7 @@ class ArchiverAgent(object):
         print("Conneciton opened")
         self._timeoutFunc()
         self._conn.add_on_close_callback(self.on_connection_closed)
-        self._chan = self._conn.channel(self.on_channel_open)
+        self._conn.channel(on_open_callback=self.on_channel_open)
         
 
     def on_channel_open(self, channel):
@@ -145,7 +145,7 @@ class ArchiverAgent(object):
         self._chan.add_on_close_callback(self.on_channel_closed)
         self.setup_queue()
 
-    def on_channel_closed(self, channel, reply_code, reply_text):
+    def on_channel_closed(self, channel, ex: Exception):
         """Invoked by pika when RabbitMQ unexpectedly closes the channel.
         Channels are usually closed if you attempt to do something that
         violates the protocol, such as re-declare an exchange or queue with
@@ -157,8 +157,8 @@ class ArchiverAgent(object):
         :param str reply_text: The text reason the channel was closed
 
         """
-        print('Channel %i was closed: (%s) %s',
-                       channel, reply_code, reply_text)
+        print(('Channel %i was closed: (%s) %s',
+                       channel, ex))
         self._conn.close()
 
     def setup_queue(self):
@@ -169,7 +169,7 @@ class ArchiverAgent(object):
         :param str|unicode queue_name: The name of the queue to declare.
 
         """
-        self._chan.queue_declare(self.on_queue_declareok, queue=self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False))
+        self._chan.queue_declare(self._config["AMQP"]['queue'], durable=True, auto_delete=self._config['AMQP'].get('auto_delete', False), callback=self.on_queue_declareok)
 
     def on_queue_declareok(self, method_frame):
         """Method invoked by pika when the Queue.Declare RPC call made in
@@ -182,7 +182,7 @@ class ArchiverAgent(object):
 
         """
         print("Queue declare ok")
-        self._chan.queue_bind(self.on_bindok, self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'])
+        self._chan.queue_bind(self._config["AMQP"]['queue'], self._config["AMQP"]['exchange'], callback=self.on_bindok)
 
     def on_bindok(self, unused_frame):
         """Invoked by pika when the Queue.Bind method has completed. At this
@@ -209,7 +209,7 @@ class ArchiverAgent(object):
         """
         print("Starting consuming")
         self._chan.add_on_cancel_callback(self.on_consumer_cancelled)
-        self._consumer_tag = self._chan.basic_consume(self.receiveMsg, self._config["AMQP"]['queue'])
+        self._consumer_tag = self._chan.basic_consume(self._config["AMQP"]['queue'], on_message_callback=self.receiveMsg)
 
     def on_consumer_cancelled(self, method_frame):
         """Invoked by pika when RabbitMQ sends a Basic.Cancel for a consumer
@@ -218,13 +218,13 @@ class ArchiverAgent(object):
         :param pika.frame.Method method_frame: The Basic.Cancel frame
 
         """
-        print('Consumer was cancelled remotely, shutting down: %r',
-                    method_frame)
+        print(('Consumer was cancelled remotely, shutting down: %r',
+                    method_frame))
         if self._chan:
             self._chan.close()
 
     def receiveMsg(self, channel, method_frame, header_frame, body):
-        self.tarWriter(body, method_frame.delivery_tag)
+        self.tarWriter(body.decode('utf-8'), method_frame.delivery_tag)
 
     def genFilename(self, dt):
         return os.path.join(self._config['Directories']['sandbox'], "gracc-{0}-{1}.tar.gz".format(socket.gethostname(), dt.strftime("%Y-%m-%d")))
@@ -240,7 +240,7 @@ class ArchiverAgent(object):
         # Close all the things
         self.tf.close()
         self.gzfile.close()
-        print "Copying final archive file from %s to %s" % (self.output_file, final_output_fname)
+        print("Copying final archive file from %s to %s" % (self.output_file, final_output_fname))
         move_without_overwrite(self.output_file, final_output_fname)
         self.gzfile = gzip.GzipFile(output_fname, 'a')
         self.output_file = output_fname
@@ -252,18 +252,18 @@ class ArchiverAgent(object):
         dt = datetime.datetime.utcfromtimestamp(now)
         tf = self.genTarFile(dt)
         hobj = hashlib.sha256()
-        hobj.update(record)
+        hobj.update(record.encode('utf-8'))
         formatted_time = dt.strftime("gracc/%Y/%m/%d/%H")
         fname = "%s/record-%d-%s" % (formatted_time, self.message_counter, hobj.hexdigest())
         ti = tarfile.TarInfo(fname)
-        sio = cStringIO.StringIO()
-        sio.write(record)
+        sio = io.BytesIO()
+        sio.write(record.encode('utf-8'))
         ti.size = sio.tell()
         sio.seek(0)
         ti.uid = self.pw.pw_uid
         ti.gid = self.pw.pw_gid
         ti.mtime = now
-        ti.mode = 0600
+        ti.mode = 0o600
         tf.addfile(ti, sio)
         self.recordTag(delivery_tag)
 
@@ -271,19 +271,19 @@ class ArchiverAgent(object):
         self.delivery_tag = delivery_tag
         self.message_counter += 1
         if self.message_counter % 1000 == 0:
-            print "Syncing file to disk (count=%d)" % self.message_counter
+            print("Syncing file to disk (count=%d)" % self.message_counter)
             self.flushFile()
             self.tf.members = []
         
     def _timeoutFunc(self):
         self.flushFile()
-        self.timer_id = self._conn.add_timeout(10, self._timeoutFunc)
+        self.timer_id = self._conn.ioloop.call_later(10, self._timeoutFunc)
 
     def flushFile(self):
         self.gzfile.flush()
         with open(self.output_file, "a") as fp:
             os.fsync(fp.fileno())
-        print "Cleared queue; ack'ing: %i" % self.message_counter
+        print("Cleared queue; ack'ing: %i" % self.message_counter)
         if self.delivery_tag:
             self._chan.basic_ack(self.delivery_tag, multiple=True)
             self.delivery_tag = None
@@ -320,7 +320,7 @@ def main():
         move_without_overwrite(in_fname, out_fname)
 
     # Create and run the OverMind
-    print "Starting the archiver agent."
+    print("Starting the archiver agent.")
     archiver_agent = ArchiverAgent(config)
     # Capture and call sys.exit for SIGTERM commands
     def exit_gracefully(signum, frame):

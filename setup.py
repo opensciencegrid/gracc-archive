@@ -11,8 +11,7 @@ setup(name='graccarchive',
       install_requires=['pika',
       'six',
       'toml',
-      'urllib3',
-      'wsgiref'
+      'urllib3'
       ],
       entry_points= {
             'console_scripts': [
